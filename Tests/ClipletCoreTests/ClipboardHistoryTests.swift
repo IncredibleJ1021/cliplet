@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClipCore
+@testable import ClipletCore
 
 final class ClipboardHistoryTests: XCTestCase {
     func testAddsNewestItemFirst() {
@@ -54,7 +54,7 @@ final class ClipboardHistoryTests: XCTestCase {
     }
 
     private func makeDefaults() -> UserDefaults {
-        let suiteName = "ClipTests.\(UUID().uuidString)"
+        let suiteName = "ClipletTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults

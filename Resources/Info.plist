@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Clip</string>
+	<string>cliplet</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.incrediblej1021.clip</string>
+	<string>io.github.incrediblej1021.cliplet</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Clip</string>
+	<string>cliplet</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

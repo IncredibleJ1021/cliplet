@@ -1,5 +1,5 @@
 import AppKit
-import ClipCore
+import ClipletCore
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = AppSettings.shared
@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "Clip")
+        item.button?.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "cliplet")
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Clipboard", action: #selector(openClipboardPanel), keyEquivalent: ""))
@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Clip", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit cliplet", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
 
         item.menu = menu

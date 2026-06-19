@@ -1,5 +1,5 @@
 import AppKit
-import ClipCore
+import ClipletCore
 
 final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate {
     private let settings: AppSettings
@@ -22,7 +22,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             backing: .buffered,
             defer: false
         )
-        window.title = "Clip Preferences"
+        window.title = "cliplet Preferences"
         window.isReleasedWhenClosed = false
 
         super.init(window: window)
@@ -49,7 +49,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             return
         }
 
-        let titleLabel = NSTextField(labelWithString: "Clip")
+        let titleLabel = NSTextField(labelWithString: "cliplet")
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 

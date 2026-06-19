@@ -7,7 +7,7 @@ test:
 	swift test
 
 run:
-	swift run Clip
+	swift run cliplet
 
 package:
 	./scripts/package_app.sh

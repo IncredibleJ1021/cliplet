@@ -3,23 +3,23 @@
 import PackageDescription
 
 let package = Package(
-    name: "Clip",
+    name: "cliplet",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "Clip", targets: ["Clip"]),
-        .library(name: "ClipCore", targets: ["ClipCore"])
+        .executable(name: "cliplet", targets: ["Cliplet"]),
+        .library(name: "ClipletCore", targets: ["ClipletCore"])
     ],
     targets: [
-        .target(name: "ClipCore"),
+        .target(name: "ClipletCore"),
         .executableTarget(
-            name: "Clip",
-            dependencies: ["ClipCore"]
+            name: "Cliplet",
+            dependencies: ["ClipletCore"]
         ),
         .testTarget(
-            name: "ClipCoreTests",
-            dependencies: ["ClipCore"]
+            name: "ClipletCoreTests",
+            dependencies: ["ClipletCore"]
         )
     ]
 )

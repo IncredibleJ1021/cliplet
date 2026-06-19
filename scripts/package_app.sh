@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Clip"
+APP_NAME="cliplet"
 VERSION="${VERSION:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
 
@@ -23,15 +23,15 @@ build_with_swiftc() {
     -parse-as-library \
     -emit-library \
     -static \
-    -module-name ClipCore \
-    "${ROOT_DIR}"/Sources/ClipCore/*.swift \
-    -emit-module-path "${fallback_dir}/ClipCore.swiftmodule" \
-    -o "${fallback_dir}/libClipCore.a"
+    -module-name ClipletCore \
+    "${ROOT_DIR}"/Sources/ClipletCore/*.swift \
+    -emit-module-path "${fallback_dir}/ClipletCore.swiftmodule" \
+    -o "${fallback_dir}/libClipletCore.a"
 
   swiftc \
     -I "${fallback_dir}" \
-    "${fallback_dir}/libClipCore.a" \
-    "${ROOT_DIR}"/Sources/Clip/*.swift \
+    "${fallback_dir}/libClipletCore.a" \
+    "${ROOT_DIR}"/Sources/Cliplet/*.swift \
     -o "${ROOT_DIR}/.build/release/${APP_NAME}" \
     -framework AppKit \
     -framework Carbon

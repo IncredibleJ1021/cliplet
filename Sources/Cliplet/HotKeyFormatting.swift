@@ -1,6 +1,6 @@
 import AppKit
 import Carbon
-import ClipCore
+import ClipletCore
 
 extension HotKey {
     var carbonModifiers: UInt32 {

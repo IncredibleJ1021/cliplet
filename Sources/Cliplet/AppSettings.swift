@@ -1,4 +1,4 @@
-import ClipCore
+import ClipletCore
 import Foundation
 
 final class AppSettings {

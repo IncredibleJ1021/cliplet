@@ -1,5 +1,5 @@
 import AppKit
-import ClipCore
+import ClipletCore
 
 final class ClipboardPanelController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     private let history: ClipboardHistory
@@ -26,7 +26,7 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
             backing: .buffered,
             defer: false
         )
-        window.title = "Clip"
+        window.title = "cliplet"
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
@@ -171,8 +171,8 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let identifier = NSUserInterfaceItemIdentifier("ClipCell")
-        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ClipCellView ?? ClipCellView()
+        let identifier = NSUserInterfaceItemIdentifier("ClipletCell")
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ClipletCellView ?? ClipletCellView()
         cell.identifier = identifier
         cell.configure(with: displayedItems[row])
         return cell
@@ -204,7 +204,7 @@ private final class ClipboardPanelWindow: NSPanel {
     }
 }
 
-private final class ClipCellView: NSTableCellView {
+private final class ClipletCellView: NSTableCellView {
     private let contentLabel = NSTextField(labelWithString: "")
     private let dateLabel = NSTextField(labelWithString: "")
     private let formatter: RelativeDateTimeFormatter = {

@@ -1,5 +1,5 @@
 import Carbon
-import ClipCore
+import ClipletCore
 import Foundation
 
 final class HotKeyManager {

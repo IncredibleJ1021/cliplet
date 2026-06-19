@@ -1,5 +1,5 @@
 import AppKit
-import ClipCore
+import ClipletCore
 
 final class ClipboardMonitor {
     private let history: ClipboardHistory
