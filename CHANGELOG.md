@@ -1,23 +1,23 @@
-# Changelog
+# 变更日志
 
 ## 0.2.0
 
-- Added image clipboard history.
-- Added image thumbnails and image size metadata in the history panel.
-- Preserved existing text history when upgrading to the mixed text/image item model.
+- 新增图片剪切板历史。
+- 历史面板新增图片缩略图和图片大小信息。
+- 升级到文本/图片混合数据模型时，保留已有文本历史。
 
 ## 0.1.2
 
-- Fixed global shortcut recording while another control has focus.
-- Added `Command-W` close handling and `Command-Q` quit handling for app windows.
+- 修复其他控件聚焦时无法录制全局快捷键的问题。
+- 为应用窗口新增 `⌘W` 关闭窗口和 `⌘Q` 退出应用支持。
 
 ## 0.1.1
 
-- Renamed the app and release artifacts to `cliplet`.
-- Localized `AGENTS.md` to Chinese.
+- 将应用和发布产物重命名为 `cliplet`。
+- 将 `AGENTS.md` 改为中文。
 
 ## 0.1.0
 
-- Initial menu bar clipboard history app.
-- Added configurable global shortcut and history limit.
-- Added local packaging and GitHub release workflow.
+- 初始菜单栏剪切板历史应用。
+- 新增可配置的全局快捷键和历史保存数量。
+- 新增本地打包脚本和 GitHub 发布流程。
