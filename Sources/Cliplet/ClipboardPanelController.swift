@@ -14,7 +14,7 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
             return allItems
         }
 
-        return allItems.filter { $0.content.localizedCaseInsensitiveContains(query) }
+        return allItems.filter { $0.searchableText.localizedCaseInsensitiveContains(query) }
     }
 
     init(history: ClipboardHistory) {
@@ -84,7 +84,7 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
         tableView.headerView = nil
-        tableView.rowHeight = 72
+        tableView.rowHeight = 84
         tableView.dataSource = self
         tableView.delegate = self
         tableView.target = self
@@ -159,9 +159,25 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         let item = displayedItems[selectedRow]
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(item.content, forType: .string)
 
-        history.add(item.content)
+        switch item.kind {
+        case .text:
+            guard let text = item.text else {
+                return
+            }
+
+            pasteboard.setString(text, forType: .string)
+            history.add(text)
+        case .image:
+            guard let imageData = item.imageData else {
+                return
+            }
+
+            let pasteboardType = NSPasteboard.PasteboardType(rawValue: item.imagePasteboardType ?? NSPasteboard.PasteboardType.png.rawValue)
+            pasteboard.setData(imageData, forType: pasteboardType)
+            history.addImageData(imageData, pasteboardType: pasteboardType.rawValue)
+        }
+
         NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
         close()
     }
@@ -229,11 +245,18 @@ private extension NSEvent.ModifierFlags {
 }
 
 private final class ClipletCellView: NSTableCellView {
+    private let thumbnailView = NSImageView()
     private let contentLabel = NSTextField(labelWithString: "")
     private let dateLabel = NSTextField(labelWithString: "")
     private let formatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
+        return formatter
+    }()
+    private let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
         return formatter
     }()
 
@@ -248,11 +271,30 @@ private final class ClipletCellView: NSTableCellView {
     }
 
     func configure(with item: ClipboardItem) {
-        contentLabel.stringValue = item.content.replacingOccurrences(of: "\n", with: " ")
-        dateLabel.stringValue = formatter.localizedString(for: item.createdAt, relativeTo: Date())
+        switch item.kind {
+        case .text:
+            thumbnailView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: "Text clip")
+            contentLabel.stringValue = (item.text ?? "").replacingOccurrences(of: "\n", with: " ")
+            dateLabel.stringValue = formatter.localizedString(for: item.createdAt, relativeTo: Date())
+        case .image:
+            thumbnailView.image = item.imageData.flatMap(NSImage.init(data:))
+            contentLabel.stringValue = "Image"
+
+            let metadata = [
+                item.imageData.map { byteFormatter.string(fromByteCount: Int64($0.count)) },
+                formatter.localizedString(for: item.createdAt, relativeTo: Date())
+            ].compactMap { $0 }
+            dateLabel.stringValue = metadata.joined(separator: " • ")
+        }
     }
 
     private func setup() {
+        thumbnailView.imageScaling = .scaleProportionallyUpOrDown
+        thumbnailView.wantsLayer = true
+        thumbnailView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        thumbnailView.layer?.cornerRadius = 6
+        thumbnailView.translatesAutoresizingMaskIntoConstraints = false
+
         contentLabel.font = .systemFont(ofSize: 14)
         contentLabel.lineBreakMode = .byTruncatingTail
         contentLabel.maximumNumberOfLines = 2
@@ -263,18 +305,24 @@ private final class ClipletCellView: NSTableCellView {
         dateLabel.textColor = .secondaryLabelColor
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        addSubview(thumbnailView)
         addSubview(contentLabel)
         addSubview(dateLabel)
 
         NSLayoutConstraint.activate([
-            contentLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            thumbnailView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            thumbnailView.widthAnchor.constraint(equalToConstant: 54),
+            thumbnailView.heightAnchor.constraint(equalToConstant: 54),
+
+            contentLabel.leadingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: 12),
             contentLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 14),
 
             dateLabel.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor),
             dateLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentLabel.trailingAnchor),
             dateLabel.topAnchor.constraint(equalTo: contentLabel.bottomAnchor, constant: 6),
-            dateLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -8)
+            dateLabel.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -12)
         ])
     }
 }

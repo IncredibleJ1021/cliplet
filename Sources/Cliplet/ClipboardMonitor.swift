@@ -35,11 +35,43 @@ final class ClipboardMonitor {
 
         changeCount = pasteboard.changeCount
 
-        guard let string = pasteboard.string(forType: .string),
-              history.add(string) else {
+        if let imagePayload = imagePayload(from: pasteboard),
+           history.addImageData(imagePayload.data, pasteboardType: imagePayload.type.rawValue) {
+            NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
             return
         }
 
-        NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
+        if let string = pasteboard.string(forType: .string),
+           history.add(string) {
+            NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
+        }
+    }
+
+    private func imagePayload(from pasteboard: NSPasteboard) -> (data: Data, type: NSPasteboard.PasteboardType)? {
+        if let pngData = pasteboard.data(forType: .png) {
+            return (pngData, .png)
+        }
+
+        if let tiffData = pasteboard.data(forType: .tiff) {
+            return (tiffData, .tiff)
+        }
+
+        guard let image = NSImage(pasteboard: pasteboard),
+              let pngData = image.pngData else {
+            return nil
+        }
+
+        return (pngData, .png)
+    }
+}
+
+private extension NSImage {
+    var pngData: Data? {
+        guard let tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffRepresentation) else {
+            return nil
+        }
+
+        return bitmap.representation(using: .png, properties: [:])
     }
 }

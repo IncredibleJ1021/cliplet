@@ -6,7 +6,7 @@ cliplet is a lightweight macOS clipboard history app. It lives in the menu bar, 
 
 - Menu bar app with no Dock icon
 - Global shortcut, defaulting to `⌃⌥V`
-- Text clipboard history with duplicate promotion
+- Text and image clipboard history with duplicate promotion
 - Configurable history limit from 1 to 200 items
 - Click, double-click, or press Return on an item to copy it back to the clipboard
 - Local persistence through `UserDefaults`
@@ -39,11 +39,11 @@ The local package is ad-hoc signed but not notarized. On a fresh machine, macOS 
 Release builds are created when a semantic version tag is pushed:
 
 ```sh
-./scripts/create_release_tag.sh v0.1.1
+./scripts/create_release_tag.sh v0.2.0
 ```
 
 The GitHub Actions release workflow builds `cliplet.app`, ad-hoc signs it, zips it, and attaches it to a GitHub Release.
 
 ## Current Scope
 
-cliplet stores text clipboard entries only. Selecting a history item copies it back to the clipboard; it does not automatically paste into the frontmost app, so it does not need Accessibility permission.
+cliplet stores text and image clipboard entries. Selecting a history item copies it back to the clipboard; it does not automatically paste into the frontmost app, so it does not need Accessibility permission.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Added image clipboard history.
+- Added image thumbnails and image size metadata in the history panel.
+- Preserved existing text history when upgrading to the mixed text/image item model.
+
 ## 0.1.2
 
 - Fixed global shortcut recording while another control has focus.

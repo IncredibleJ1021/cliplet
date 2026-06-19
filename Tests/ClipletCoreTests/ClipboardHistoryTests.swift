@@ -53,6 +53,51 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertEqual(secondHistory.items.map(\.content), ["persisted"])
     }
 
+    func testAddsImageItem() {
+        let defaults = makeDefaults()
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5)
+        let data = Data([0, 1, 2, 3])
+
+        XCTAssertTrue(history.addImageData(data, pasteboardType: "public.png"))
+
+        XCTAssertEqual(history.items.first?.kind, .image)
+        XCTAssertEqual(history.items.first?.imageData, data)
+        XCTAssertEqual(history.items.first?.imagePasteboardType, "public.png")
+    }
+
+    func testMovesDuplicateImageToTop() {
+        let defaults = makeDefaults()
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5)
+        let firstData = Data([0, 1, 2, 3])
+        let secondData = Data([4, 5, 6, 7])
+
+        history.addImageData(firstData, pasteboardType: "public.png")
+        history.addImageData(secondData, pasteboardType: "public.png")
+        history.addImageData(firstData, pasteboardType: "public.png")
+
+        XCTAssertEqual(history.items.compactMap(\.imageData), [firstData, secondData])
+    }
+
+    func testDecodesLegacyTextItems() throws {
+        struct LegacyItem: Encodable {
+            let id: UUID
+            let content: String
+            let createdAt: Date
+        }
+
+        let defaults = makeDefaults()
+        let legacyItems = [
+            LegacyItem(id: UUID(), content: "legacy", createdAt: Date())
+        ]
+        let data = try JSONEncoder().encode(legacyItems)
+        defaults.set(data, forKey: "items")
+
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5)
+
+        XCTAssertEqual(history.items.first?.kind, .text)
+        XCTAssertEqual(history.items.first?.content, "legacy")
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "ClipletTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

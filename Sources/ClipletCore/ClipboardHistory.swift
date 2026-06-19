@@ -33,8 +33,36 @@ public final class ClipboardHistory {
             return false
         }
 
-        items.removeAll { $0.content == normalized }
+        items.removeAll { $0.kind == .text && $0.text == normalized }
         items.insert(ClipboardItem(content: normalized, createdAt: createdAt), at: 0)
+        trimToLimit()
+        save()
+        return true
+    }
+
+    @discardableResult
+    public func addImageData(
+        _ imageData: Data,
+        pasteboardType: String,
+        createdAt: Date = Date()
+    ) -> Bool {
+        guard !imageData.isEmpty else {
+            return false
+        }
+
+        items.removeAll {
+            $0.kind == .image &&
+                $0.imageData == imageData &&
+                $0.imagePasteboardType == pasteboardType
+        }
+        items.insert(
+            ClipboardItem(
+                imageData: imageData,
+                imagePasteboardType: pasteboardType,
+                createdAt: createdAt
+            ),
+            at: 0
+        )
         trimToLimit()
         save()
         return true
