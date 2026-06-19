@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Fixed global shortcut recording while another control has focus.
+- Added `Command-W` close handling and `Command-Q` quit handling for app windows.
+
 ## 0.1.1
 
 - Renamed the app and release artifacts to `cliplet`.

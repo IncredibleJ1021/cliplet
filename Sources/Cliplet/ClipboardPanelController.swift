@@ -202,6 +202,30 @@ private final class ClipboardPanelWindow: NSPanel {
             super.keyDown(with: event)
         }
     }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.modifierFlags.commandOnly else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        switch event.keyCode {
+        case 13:
+            close()
+            return true
+        case 12:
+            NSApp.terminate(nil)
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
+    }
+}
+
+private extension NSEvent.ModifierFlags {
+    var commandOnly: Bool {
+        intersection([.command, .option, .control, .shift]) == .command
+    }
 }
 
 private final class ClipletCellView: NSTableCellView {

@@ -1,7 +1,7 @@
 import AppKit
 import ClipletCore
 
-final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate {
+final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate, NSWindowDelegate {
     private let settings: AppSettings
     private let history: ClipboardHistory
     private let hotKeyManager: HotKeyManager
@@ -16,7 +16,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         self.hotKeyManager = hotKeyManager
         self.shortcutButton = ShortcutRecorderButton(hotKey: settings.hotKey)
 
-        let window = NSWindow(
+        let window = PreferencesWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
             styleMask: [.titled, .closable],
             backing: .buffered,
@@ -27,6 +27,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
 
         super.init(window: window)
 
+        window.delegate = self
         buildContent()
     }
 
@@ -73,6 +74,16 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         let shortcutLabel = NSTextField(labelWithString: "Global shortcut")
         shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
 
+        shortcutButton.onRecordingStarted = { [weak self] in
+            self?.hotKeyManager.unregister()
+        }
+        shortcutButton.onRecordingCancelled = { [weak self] in
+            guard let self else {
+                return
+            }
+
+            self.hotKeyManager.register(self.settings.hotKey)
+        }
         shortcutButton.onShortcutChange = { [weak self] hotKey in
             self?.settings.hotKey = hotKey
             self?.hotKeyManager.register(hotKey)
@@ -140,7 +151,13 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         saveHistoryLimit(value)
     }
 
+    func windowWillClose(_ notification: Notification) {
+        shortcutButton.cancelRecordingIfNeeded()
+    }
+
     @objc private func resetDefaults() {
+        shortcutButton.cancelRecordingIfNeeded()
+
         let defaultLimit = 50
         let defaultHotKey = HotKey(keyCode: 9, modifiers: [.control, .option])
 
@@ -165,8 +182,30 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     }
 }
 
+private final class PreferencesWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              event.modifierFlags.commandOnly else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        switch event.keyCode {
+        case 13:
+            close()
+            return true
+        case 12:
+            NSApp.terminate(nil)
+            return true
+        default:
+            return super.performKeyEquivalent(with: event)
+        }
+    }
+}
+
 private final class ShortcutRecorderButton: NSButton {
     var onShortcutChange: ((HotKey) -> Void)?
+    var onRecordingStarted: (() -> Void)?
+    var onRecordingCancelled: (() -> Void)?
 
     var hotKey: HotKey {
         didSet {
@@ -177,6 +216,7 @@ private final class ShortcutRecorderButton: NSButton {
     }
 
     private var isRecording = false
+    private var keyDownMonitor: Any?
 
     init(hotKey: HotKey) {
         self.hotKey = hotKey
@@ -200,23 +240,29 @@ private final class ShortcutRecorderButton: NSButton {
     }
 
     override func keyDown(with event: NSEvent) {
-        guard handle(event) else {
+        guard handleKeyDown(event) else {
             super.keyDown(with: event)
             return
         }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        handle(event) || super.performKeyEquivalent(with: event)
+        handleKeyDown(event) || super.performKeyEquivalent(with: event)
     }
 
     @objc private func beginRecording() {
+        guard !isRecording else {
+            return
+        }
+
         isRecording = true
         title = "Press shortcut"
         window?.makeFirstResponder(self)
+        onRecordingStarted?()
+        installKeyDownMonitor()
     }
 
-    private func handle(_ event: NSEvent) -> Bool {
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard isRecording else {
             return false
         }
@@ -234,15 +280,59 @@ private final class ShortcutRecorderButton: NSButton {
 
         let recorded = HotKey(keyCode: UInt16(event.keyCode), modifiers: modifiers)
         hotKey = recorded
-        isRecording = false
-        window?.makeFirstResponder(nil)
+        stopRecording()
         onShortcutChange?(recorded)
         return true
     }
 
     private func cancelRecording() {
+        stopRecording()
+        onRecordingCancelled?()
+    }
+
+    func cancelRecordingIfNeeded() {
+        guard isRecording else {
+            return
+        }
+
+        cancelRecording()
+    }
+
+    private func stopRecording() {
         isRecording = false
         title = hotKey.displayString
+        removeKeyDownMonitor()
         window?.makeFirstResponder(nil)
+    }
+
+    private func installKeyDownMonitor() {
+        removeKeyDownMonitor()
+
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            return self.handleKeyDown(event) ? nil : event
+        }
+    }
+
+    private func removeKeyDownMonitor() {
+        guard let keyDownMonitor else {
+            return
+        }
+
+        NSEvent.removeMonitor(keyDownMonitor)
+        self.keyDownMonitor = nil
+    }
+
+    deinit {
+        removeKeyDownMonitor()
+    }
+}
+
+private extension NSEvent.ModifierFlags {
+    var commandOnly: Bool {
+        intersection([.command, .option, .control, .shift]) == .command
     }
 }
