@@ -1,0 +1,38 @@
+{
+  "name": "@incrediblej1021/cliplet",
+  "version": "0.3.1",
+  "description": "Installer for the cliplet macOS menu bar clipboard history app",
+  "license": "MIT",
+  "homepage": "https://github.com/IncredibleJ1021/cliplet#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IncredibleJ1021/cliplet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IncredibleJ1021/cliplet/issues"
+  },
+  "bin": {
+    "cliplet-installer": "npm/cliplet.js"
+  },
+  "files": [
+    "npm/",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64",
+    "x64"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "pack:check": "npm pack --dry-run"
+  }
+}
