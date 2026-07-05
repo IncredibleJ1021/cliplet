@@ -1,6 +1,6 @@
 cask "cliplet" do
-  version "0.3.2"
-  sha256 "696082bec6101b2daeb38df3062c1d0e4a4391a0042e5ae98b4bb2a400cc4d2f"
+  version "0.4.0"
+  sha256 "c501f6887b8ac64949a2d0eae5e72b1250f82f61bc5c365c2fa63c3c520420f0"
 
   url "https://github.com/IncredibleJ1021/cliplet/releases/download/v#{version}/cliplet-macOS-v#{version}.zip"
   name "cliplet"
