@@ -165,20 +165,12 @@ chflags hidden "${STAGING_DIR}/.background" 2>/dev/null || true
 
 rm -f "${DMG_PATH}"
 
-if diskutil image create from --help >/dev/null 2>&1; then
-  diskutil image create from \
-    --format UDRW \
-    --volumeName "${VOLUME_NAME}" \
-    "${STAGING_DIR}" \
-    "${RW_DMG}"
-else
-  hdiutil create \
-    -volname "${VOLUME_NAME}" \
-    -srcfolder "${STAGING_DIR}" \
-    -ov \
-    -format UDRW \
-    "${RW_DMG}"
-fi
+hdiutil create \
+  -volname "${VOLUME_NAME}" \
+  -srcfolder "${STAGING_DIR}" \
+  -ov \
+  -format UDRW \
+  "${RW_DMG}"
 
 ATTACH_PLIST="${WORK_DIR}/attach.plist"
 diskutil image attach \
