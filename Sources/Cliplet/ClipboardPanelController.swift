@@ -3,12 +3,15 @@ import ClipletCore
 
 final class ClipboardPanelController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     private let history: ClipboardHistory
+    private let settings: AppSettings
+    private let autoPasteController: AutoPasteController
     private let onPasteboardWrite: () -> Void
     private let tableView = NSTableView()
     private let searchField = NSSearchField()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet")
 
     private var query = ""
+    private var sourceApplication: NSRunningApplication?
     private var displayedItems: [ClipboardItem] {
         let allItems = history.items
         guard !query.isEmpty else {
@@ -18,12 +21,19 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         return allItems.filter { $0.searchableText.localizedCaseInsensitiveContains(query) }
     }
 
-    init(history: ClipboardHistory, onPasteboardWrite: @escaping () -> Void = {}) {
+    init(
+        history: ClipboardHistory,
+        settings: AppSettings,
+        autoPasteController: AutoPasteController,
+        onPasteboardWrite: @escaping () -> Void = {}
+    ) {
         self.history = history
+        self.settings = settings
+        self.autoPasteController = autoPasteController
         self.onPasteboardWrite = onPasteboardWrite
 
         let window = ClipboardPanelWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 580),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -32,8 +42,10 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.level = .floating
-        window.minSize = NSSize(width: 360, height: 360)
+        window.minSize = NSSize(width: 420, height: 420)
         window.collectionBehavior = [.moveToActiveSpace, .transient]
 
         super.init(window: window)
@@ -62,7 +74,8 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         NotificationCenter.default.removeObserver(self)
     }
 
-    func show() {
+    func show(sourceApplication: NSRunningApplication?) {
+        self.sourceApplication = sourceApplication
         reloadItems()
         positionWindow()
         window?.makeKeyAndOrderFront(nil)
@@ -76,17 +89,28 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         }
 
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+
+        let backgroundView = NSVisualEffectView()
+        backgroundView.material = .popover
+        backgroundView.blendingMode = .behindWindow
+        backgroundView.state = .active
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
 
         searchField.placeholderString = "Search"
         searchField.delegate = self
+        searchField.font = .systemFont(ofSize: 15)
+        searchField.controlSize = .large
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clip"))
         column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
         tableView.headerView = nil
-        tableView.rowHeight = 84
+        tableView.rowHeight = 78
+        tableView.intercellSpacing = NSSize(width: 0, height: 4)
+        tableView.backgroundColor = .clear
+        tableView.selectionHighlightStyle = .none
         tableView.dataSource = self
         tableView.delegate = self
         tableView.target = self
@@ -105,19 +129,25 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         emptyLabel.font = .systemFont(ofSize: 15, weight: .medium)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        contentView.addSubview(searchField)
-        contentView.addSubview(scrollView)
-        contentView.addSubview(emptyLabel)
+        contentView.addSubview(backgroundView)
+        backgroundView.addSubview(searchField)
+        backgroundView.addSubview(scrollView)
+        backgroundView.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 22),
-            searchField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
-            searchField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            backgroundView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            searchField.topAnchor.constraint(equalTo: backgroundView.topAnchor, constant: 26),
+            searchField.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor, constant: 20),
+            searchField.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor, constant: -20),
 
             scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
-            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: backgroundView.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: backgroundView.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: backgroundView.bottomAnchor, constant: -10),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: scrollView.centerYAnchor)
@@ -147,9 +177,15 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         tableView.reloadData()
         emptyLabel.isHidden = !displayedItems.isEmpty
 
-        if !displayedItems.isEmpty && tableView.selectedRow < 0 {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        guard !displayedItems.isEmpty else {
+            tableView.deselectAll(nil)
+            return
         }
+
+        let selectedRow = tableView.selectedRow
+        let rowToSelect = displayedItems.indices.contains(selectedRow) ? selectedRow : 0
+        tableView.selectRowIndexes(IndexSet(integer: rowToSelect), byExtendingSelection: false)
+        tableView.scrollRowToVisible(rowToSelect)
     }
 
     @objc private func copySelectedClip() {
@@ -188,6 +224,14 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
             NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
         }
         close()
+
+        guard settings.pasteAfterSelection else {
+            return
+        }
+
+        if !autoPasteController.paste(to: sourceApplication) {
+            autoPasteController.requestAccessibilityPermissionPrompt()
+        }
     }
 
     func numberOfRows(in tableView: NSTableView) -> Int {
@@ -201,6 +245,10 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         let item = displayedItems[row]
         cell.configure(with: item, imageData: history.imageData(for: item))
         return cell
+    }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        ClipletRowView()
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -253,6 +301,27 @@ private extension NSEvent.ModifierFlags {
     }
 }
 
+private final class ClipletRowView: NSTableRowView {
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
+        guard isSelected else {
+            return
+        }
+
+        drawSelectedBackground()
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        drawSelectedBackground()
+    }
+
+    private func drawSelectedBackground() {
+        let selectionRect = bounds.insetBy(dx: 10, dy: 4)
+        NSColor.controlAccentColor.withAlphaComponent(0.18).setFill()
+        NSBezierPath(roundedRect: selectionRect, xRadius: 10, yRadius: 10).fill()
+    }
+}
+
 private final class ClipletCellView: NSTableCellView {
     private let thumbnailView = NSImageView()
     private let contentLabel = NSTextField(labelWithString: "")
@@ -283,11 +352,18 @@ private final class ClipletCellView: NSTableCellView {
         switch item.kind {
         case .text:
             thumbnailView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: "Text clip")
+            thumbnailView.contentTintColor = .controlAccentColor
+            thumbnailView.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+            thumbnailView.layer?.borderWidth = 0
             contentLabel.stringValue = (item.text ?? "").replacingOccurrences(of: "\n", with: " ")
             dateLabel.stringValue = formatter.localizedString(for: item.createdAt, relativeTo: Date())
         case .image:
             thumbnailView.image = imageData.flatMap(NSImage.init(data:)) ??
                 NSImage(systemSymbolName: "photo", accessibilityDescription: "Image clip")
+            thumbnailView.contentTintColor = nil
+            thumbnailView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.06).cgColor
+            thumbnailView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+            thumbnailView.layer?.borderWidth = 1
             contentLabel.stringValue = "Image"
 
             let metadata = [
@@ -302,10 +378,11 @@ private final class ClipletCellView: NSTableCellView {
         thumbnailView.imageScaling = .scaleProportionallyUpOrDown
         thumbnailView.wantsLayer = true
         thumbnailView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        thumbnailView.layer?.cornerRadius = 6
+        thumbnailView.layer?.cornerRadius = 10
+        thumbnailView.layer?.masksToBounds = true
         thumbnailView.translatesAutoresizingMaskIntoConstraints = false
 
-        contentLabel.font = .systemFont(ofSize: 14)
+        contentLabel.font = .systemFont(ofSize: 14, weight: .medium)
         contentLabel.lineBreakMode = .byTruncatingTail
         contentLabel.maximumNumberOfLines = 2
         contentLabel.textColor = .labelColor
@@ -320,14 +397,14 @@ private final class ClipletCellView: NSTableCellView {
         addSubview(dateLabel)
 
         NSLayoutConstraint.activate([
-            thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 22),
             thumbnailView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            thumbnailView.widthAnchor.constraint(equalToConstant: 54),
-            thumbnailView.heightAnchor.constraint(equalToConstant: 54),
+            thumbnailView.widthAnchor.constraint(equalToConstant: 48),
+            thumbnailView.heightAnchor.constraint(equalToConstant: 48),
 
-            contentLabel.leadingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: 12),
-            contentLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            contentLabel.leadingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: 14),
+            contentLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24),
+            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 13),
 
             dateLabel.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor),
             dateLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentLabel.trailingAnchor),

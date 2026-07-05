@@ -6,13 +6,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var history = ClipboardHistory(limit: settings.historyLimit)
     private lazy var monitor = ClipboardMonitor(history: history)
     private let hotKeyManager = HotKeyManager()
+    private let autoPasteController = AutoPasteController()
 
     private var statusItem: NSStatusItem?
     private var clipboardPanelController: ClipboardPanelController?
     private var preferencesController: PreferencesWindowController?
+    private var lastTargetApplication: NSRunningApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
+        observeActiveApplicationChanges()
 
         hotKeyManager.onPressed = { [weak self] in
             self?.toggleClipboardPanel()
@@ -25,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         monitor.stop()
         hotKeyManager.unregister()
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     private func configureStatusItem() {
@@ -60,13 +64,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if clipboardPanelController == nil {
             clipboardPanelController = ClipboardPanelController(
                 history: history,
+                settings: settings,
+                autoPasteController: autoPasteController,
                 onPasteboardWrite: { [weak monitor] in
                     monitor?.syncChangeCount()
                 }
             )
         }
 
-        clipboardPanelController?.show()
+        clipboardPanelController?.show(sourceApplication: currentTargetApplication())
     }
 
     private func registerConfiguredHotKey() {
@@ -80,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             preferencesController = PreferencesWindowController(
                 settings: settings,
                 history: history,
-                hotKeyManager: hotKeyManager
+                hotKeyManager: hotKeyManager,
+                autoPasteController: autoPasteController
             )
         }
 
@@ -94,5 +101,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func observeActiveApplicationChanges() {
+        updateLastTargetApplication(NSWorkspace.shared.frontmostApplication)
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(activeApplicationDidChange),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    @objc private func activeApplicationDidChange(_ notification: Notification) {
+        let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        updateLastTargetApplication(application)
+    }
+
+    private func updateLastTargetApplication(_ application: NSRunningApplication?) {
+        guard let application, !isCliplet(application) else {
+            return
+        }
+
+        lastTargetApplication = application
+    }
+
+    private func currentTargetApplication() -> NSRunningApplication? {
+        guard let frontmostApplication = NSWorkspace.shared.frontmostApplication else {
+            return lastTargetApplication
+        }
+
+        return isCliplet(frontmostApplication) ? lastTargetApplication : frontmostApplication
+    }
+
+    private func isCliplet(_ application: NSRunningApplication) -> Bool {
+        application.bundleIdentifier == Bundle.main.bundleIdentifier ||
+            application.processIdentifier == NSRunningApplication.current.processIdentifier
     }
 }

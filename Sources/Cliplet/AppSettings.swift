@@ -7,6 +7,7 @@ final class AppSettings {
     private enum Keys {
         static let historyLimit = "settings.historyLimit"
         static let hotKey = "settings.hotKey"
+        static let pasteAfterSelection = "settings.pasteAfterSelection"
     }
 
     private let defaults: UserDefaults
@@ -42,6 +43,19 @@ final class AppSettings {
             }
 
             defaults.set(data, forKey: Keys.hotKey)
+        }
+    }
+
+    var pasteAfterSelection: Bool {
+        get {
+            guard defaults.object(forKey: Keys.pasteAfterSelection) != nil else {
+                return true
+            }
+
+            return defaults.bool(forKey: Keys.pasteAfterSelection)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.pasteAfterSelection)
         }
     }
 }

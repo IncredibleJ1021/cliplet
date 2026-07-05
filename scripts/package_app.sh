@@ -34,6 +34,7 @@ build_with_swiftc() {
     "${ROOT_DIR}"/Sources/Cliplet/*.swift \
     -o "${ROOT_DIR}/.build/release/${APP_NAME}" \
     -framework AppKit \
+    -framework ApplicationServices \
     -framework Carbon
 }
 

@@ -18,7 +18,7 @@ function usage() {
   cliplet-installer open         Open the installed app
 
 Environment:
-  CLIPLET_VERSION=v0.3.0         Install a specific GitHub release tag
+  CLIPLET_VERSION=v0.4.0         Install a specific GitHub release tag
   CLIPLET_INSTALL_DIR=~/Apps     Install somewhere other than /Applications`);
 }
 
