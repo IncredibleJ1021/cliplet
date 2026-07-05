@@ -39,123 +39,29 @@ build_with_swiftc() {
 
 generate_app_icon() {
   local target_icns="$1"
+  local source_png="${ROOT_DIR}/Resources/AppIcon.png"
   local icon_work_dir
   icon_work_dir="$(mktemp -d)"
   local iconset_dir="${icon_work_dir}/AppIcon.iconset"
-  local drawer="${icon_work_dir}/draw_icon.swift"
 
   mkdir -p "${iconset_dir}"
 
-  cat > "${drawer}" <<'SWIFT'
-import AppKit
-import Foundation
+  if [[ ! -f "${source_png}" ]]; then
+    echo "Missing icon source: ${source_png}" >&2
+    exit 1
+  fi
 
-let iconsetURL = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
-let sizes = [
-    (16, 1), (16, 2),
-    (32, 1), (32, 2),
-    (128, 1), (128, 2),
-    (256, 1), (256, 2),
-    (512, 1), (512, 2)
-]
+  sips -z 16 16 "${source_png}" --out "${iconset_dir}/icon_16x16.png" >/dev/null
+  sips -z 32 32 "${source_png}" --out "${iconset_dir}/icon_16x16@2x.png" >/dev/null
+  sips -z 32 32 "${source_png}" --out "${iconset_dir}/icon_32x32.png" >/dev/null
+  sips -z 64 64 "${source_png}" --out "${iconset_dir}/icon_32x32@2x.png" >/dev/null
+  sips -z 128 128 "${source_png}" --out "${iconset_dir}/icon_128x128.png" >/dev/null
+  sips -z 256 256 "${source_png}" --out "${iconset_dir}/icon_128x128@2x.png" >/dev/null
+  sips -z 256 256 "${source_png}" --out "${iconset_dir}/icon_256x256.png" >/dev/null
+  sips -z 512 512 "${source_png}" --out "${iconset_dir}/icon_256x256@2x.png" >/dev/null
+  sips -z 512 512 "${source_png}" --out "${iconset_dir}/icon_512x512.png" >/dev/null
+  sips -z 1024 1024 "${source_png}" --out "${iconset_dir}/icon_512x512@2x.png" >/dev/null
 
-func color(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat, _ alpha: CGFloat = 1) -> NSColor {
-    NSColor(calibratedRed: red / 255, green: green / 255, blue: blue / 255, alpha: alpha)
-}
-
-func roundedRect(_ rect: NSRect, radius: CGFloat) -> NSBezierPath {
-    NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-}
-
-func drawIcon() {
-    NSGraphicsContext.current?.imageInterpolation = .high
-
-    let shadow = NSShadow()
-    shadow.shadowColor = color(24, 56, 96, 0.28)
-    shadow.shadowBlurRadius = 42
-    shadow.shadowOffset = NSSize(width: 0, height: -20)
-    shadow.set()
-
-    let outer = roundedRect(NSRect(x: 86, y: 86, width: 852, height: 852), radius: 210)
-    NSGradient(colors: [
-        color(27, 214, 199),
-        color(44, 142, 238),
-        color(88, 99, 246)
-    ])?.draw(in: outer, angle: -38)
-
-    NSShadow().set()
-
-    color(255, 255, 255, 0.20).setStroke()
-    outer.lineWidth = 10
-    outer.stroke()
-
-    let pageShadow = NSShadow()
-    pageShadow.shadowColor = color(9, 41, 74, 0.22)
-    pageShadow.shadowBlurRadius = 24
-    pageShadow.shadowOffset = NSSize(width: 0, height: -12)
-    pageShadow.set()
-
-    let page = roundedRect(NSRect(x: 284, y: 210, width: 456, height: 604), radius: 60)
-    color(255, 255, 255, 0.92).setFill()
-    page.fill()
-
-    NSShadow().set()
-
-    let clip = roundedRect(NSRect(x: 392, y: 748, width: 240, height: 92), radius: 38)
-    color(226, 240, 248, 0.96).setFill()
-    clip.fill()
-
-    let clipInner = roundedRect(NSRect(x: 446, y: 786, width: 132, height: 46), radius: 23)
-    color(52, 141, 219, 0.22).setStroke()
-    clipInner.lineWidth = 18
-    clipInner.stroke()
-
-    let lineColor = color(43, 108, 174, 0.52)
-    lineColor.setStroke()
-    for y in [624, 526, 428] {
-        let line = NSBezierPath()
-        line.move(to: NSPoint(x: 360, y: y))
-        line.line(to: NSPoint(x: 664, y: y))
-        line.lineCapStyle = .round
-        line.lineWidth = 30
-        line.stroke()
-    }
-
-    let check = NSBezierPath()
-    check.move(to: NSPoint(x: 372, y: 322))
-    check.line(to: NSPoint(x: 468, y: 236))
-    check.line(to: NSPoint(x: 658, y: 470))
-    check.lineCapStyle = .round
-    check.lineJoinStyle = .round
-    check.lineWidth = 52
-    color(34, 191, 149).setStroke()
-    check.stroke()
-}
-
-for (logicalSize, scale) in sizes {
-    let pixelSize = logicalSize * scale
-    let image = NSImage(size: NSSize(width: pixelSize, height: pixelSize))
-    image.lockFocus()
-    NSGraphicsContext.current?.cgContext.scaleBy(
-        x: CGFloat(pixelSize) / 1024,
-        y: CGFloat(pixelSize) / 1024
-    )
-    drawIcon()
-    image.unlockFocus()
-
-    guard let tiff = image.tiffRepresentation,
-          let bitmap = NSBitmapImageRep(data: tiff),
-          let data = bitmap.representation(using: .png, properties: [:]) else {
-        fatalError("Could not render icon size \(logicalSize)@\(scale)x")
-    }
-
-    let suffix = scale == 2 ? "@2x" : ""
-    let filename = "icon_\(logicalSize)x\(logicalSize)\(suffix).png"
-    try data.write(to: iconsetURL.appendingPathComponent(filename))
-}
-SWIFT
-
-  swift "${drawer}" "${iconset_dir}"
   iconutil -c icns "${iconset_dir}" -o "${target_icns}"
   rm -rf "${icon_work_dir}"
 }
