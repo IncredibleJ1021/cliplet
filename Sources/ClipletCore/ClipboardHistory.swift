@@ -6,37 +6,52 @@ public final class ClipboardHistory {
 
     private let defaults: UserDefaults
     private let storageKey: String
+    private let imageStore: ClipboardImageStore
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
     public init(
         defaults: UserDefaults = .standard,
         storageKey: String = "clipboard.history.items",
-        limit: Int = 50
+        limit: Int = 50,
+        imageStore: ClipboardImageStore = .applicationSupport()
     ) {
         self.defaults = defaults
         self.storageKey = storageKey
+        self.imageStore = imageStore
         self.limit = Self.clampedLimit(limit)
+        self.items = []
 
         if let data = defaults.data(forKey: storageKey),
            let decodedItems = try? decoder.decode([ClipboardItem].self, from: data) {
-            self.items = Array(decodedItems.prefix(self.limit))
-        } else {
-            self.items = []
+            var didChangeStoredForm = false
+            self.items = decodedItems.map { item in
+                let prepared = prepareForFileStorage(item)
+                didChangeStoredForm = didChangeStoredForm || prepared.didChange
+                return prepared.item
+            }
+
+            if items.count > self.limit {
+                self.items = Array(items.prefix(self.limit))
+                didChangeStoredForm = true
+            }
+
+            if didChangeStoredForm {
+                persistAndPruneImages()
+            }
         }
     }
 
     @discardableResult
     public func add(_ content: String, createdAt: Date = Date()) -> Bool {
-        let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else {
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return false
         }
 
-        items.removeAll { $0.kind == .text && $0.text == normalized }
-        items.insert(ClipboardItem(content: normalized, createdAt: createdAt), at: 0)
+        items.removeAll { $0.text == content }
+        items.insert(ClipboardItem(content: content, createdAt: createdAt), at: 0)
         trimToLimit()
-        save()
+        persistAndPruneImages()
         return true
     }
 
@@ -50,33 +65,51 @@ public final class ClipboardHistory {
             return false
         }
 
+        let id = UUID()
+        let image: ClipboardImage
+        do {
+            image = try imageStore.store(imageData, pasteboardType: pasteboardType, id: id)
+        } catch {
+            return false
+        }
+
         items.removeAll {
-            $0.kind == .image &&
-                $0.imageData == imageData &&
-                $0.imagePasteboardType == pasteboardType
+            $0.imagePasteboardType == pasteboardType &&
+                $0.imageByteCount == image.byteCount &&
+                $0.imageFingerprint == image.fingerprint
         }
         items.insert(
             ClipboardItem(
-                imageData: imageData,
-                imagePasteboardType: pasteboardType,
+                id: id,
+                image: image,
                 createdAt: createdAt
             ),
             at: 0
         )
         trimToLimit()
-        save()
+        persistAndPruneImages()
         return true
+    }
+
+    public func imageData(for item: ClipboardItem) -> Data? {
+        guard let image = item.image else {
+            return nil
+        }
+
+        return imageStore.data(for: image)
     }
 
     public func updateLimit(_ newLimit: Int) {
         limit = Self.clampedLimit(newLimit)
         trimToLimit()
-        save()
+        persistAndPruneImages()
     }
 
     public func clear() {
         items.removeAll()
-        save()
+        if save() {
+            imageStore.removeAll()
+        }
     }
 
     private func trimToLimit() {
@@ -85,12 +118,40 @@ public final class ClipboardHistory {
         }
     }
 
-    private func save() {
-        guard let data = try? encoder.encode(items) else {
+    private func prepareForFileStorage(_ item: ClipboardItem) -> (item: ClipboardItem, didChange: Bool) {
+        guard let image = item.image,
+              let inlineData = image.inlineData else {
+            return (item, false)
+        }
+
+        do {
+            let storedImage = try imageStore.store(inlineData, pasteboardType: image.pasteboardType, id: item.id)
+            return (ClipboardItem(id: item.id, image: storedImage, createdAt: item.createdAt), true)
+        } catch {
+            return (item, false)
+        }
+    }
+
+    private func persistAndPruneImages() {
+        guard save() else {
             return
         }
 
+        imageStore.deleteUnused(keeping: retainedImageKeys())
+    }
+
+    private func retainedImageKeys() -> Set<String> {
+        Set(items.compactMap(\.imageStorageKey))
+    }
+
+    @discardableResult
+    private func save() -> Bool {
+        guard let data = try? encoder.encode(items) else {
+            return false
+        }
+
         defaults.set(data, forKey: storageKey)
+        return true
     }
 
     private static func clampedLimit(_ value: Int) -> Int {

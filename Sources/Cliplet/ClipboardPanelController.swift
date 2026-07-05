@@ -3,6 +3,7 @@ import ClipletCore
 
 final class ClipboardPanelController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     private let history: ClipboardHistory
+    private let onPasteboardWrite: () -> Void
     private let tableView = NSTableView()
     private let searchField = NSSearchField()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet")
@@ -17,8 +18,9 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         return allItems.filter { $0.searchableText.localizedCaseInsensitiveContains(query) }
     }
 
-    init(history: ClipboardHistory) {
+    init(history: ClipboardHistory, onPasteboardWrite: @escaping () -> Void = {}) {
         self.history = history
+        self.onPasteboardWrite = onPasteboardWrite
 
         let window = ClipboardPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
@@ -158,7 +160,7 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
 
         let item = displayedItems[selectedRow]
         let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
+        var didUpdateHistory = false
 
         switch item.kind {
         case .text:
@@ -166,19 +168,25 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
                 return
             }
 
+            pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
-            history.add(text)
+            didUpdateHistory = history.add(text)
         case .image:
-            guard let imageData = item.imageData else {
+            guard let imageData = history.imageData(for: item),
+                  let imagePasteboardType = item.imagePasteboardType else {
                 return
             }
 
-            let pasteboardType = NSPasteboard.PasteboardType(rawValue: item.imagePasteboardType ?? NSPasteboard.PasteboardType.png.rawValue)
+            let pasteboardType = NSPasteboard.PasteboardType(rawValue: imagePasteboardType)
+            pasteboard.clearContents()
             pasteboard.setData(imageData, forType: pasteboardType)
-            history.addImageData(imageData, pasteboardType: pasteboardType.rawValue)
+            didUpdateHistory = history.addImageData(imageData, pasteboardType: pasteboardType.rawValue)
         }
 
-        NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
+        onPasteboardWrite()
+        if didUpdateHistory {
+            NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
+        }
         close()
     }
 
@@ -190,7 +198,8 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         let identifier = NSUserInterfaceItemIdentifier("ClipletCell")
         let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? ClipletCellView ?? ClipletCellView()
         cell.identifier = identifier
-        cell.configure(with: displayedItems[row])
+        let item = displayedItems[row]
+        cell.configure(with: item, imageData: history.imageData(for: item))
         return cell
     }
 
@@ -270,18 +279,19 @@ private final class ClipletCellView: NSTableCellView {
         setup()
     }
 
-    func configure(with item: ClipboardItem) {
+    func configure(with item: ClipboardItem, imageData: Data?) {
         switch item.kind {
         case .text:
             thumbnailView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: "Text clip")
             contentLabel.stringValue = (item.text ?? "").replacingOccurrences(of: "\n", with: " ")
             dateLabel.stringValue = formatter.localizedString(for: item.createdAt, relativeTo: Date())
         case .image:
-            thumbnailView.image = item.imageData.flatMap(NSImage.init(data:))
+            thumbnailView.image = imageData.flatMap(NSImage.init(data:)) ??
+                NSImage(systemSymbolName: "photo", accessibilityDescription: "Image clip")
             contentLabel.stringValue = "Image"
 
             let metadata = [
-                item.imageData.map { byteFormatter.string(fromByteCount: Int64($0.count)) },
+                item.imageByteCount.map { byteFormatter.string(fromByteCount: Int64($0)) },
                 formatter.localizedString(for: item.createdAt, relativeTo: Date())
             ].compactMap { $0 }
             dateLabel.stringValue = metadata.joined(separator: " • ")

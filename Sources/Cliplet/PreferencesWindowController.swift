@@ -82,12 +82,10 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
                 return
             }
 
-            self.hotKeyManager.register(self.settings.hotKey)
+            self.restoreStoredHotKey()
         }
         shortcutButton.onShortcutChange = { [weak self] hotKey in
-            self?.settings.hotKey = hotKey
-            self?.hotKeyManager.register(hotKey)
-            NotificationCenter.default.post(name: .settingsDidChange, object: nil)
+            self?.saveHotKeyIfAvailable(hotKey)
         }
         shortcutButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -163,12 +161,9 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
 
         countField.integerValue = defaultLimit
         stepper.integerValue = defaultLimit
-        shortcutButton.hotKey = defaultHotKey
-
-        settings.historyLimit = defaultLimit
-        settings.hotKey = defaultHotKey
         history.updateLimit(defaultLimit)
-        hotKeyManager.register(defaultHotKey)
+        settings.historyLimit = defaultLimit
+        saveHotKeyIfAvailable(defaultHotKey)
 
         NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
@@ -179,6 +174,39 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         history.updateLimit(value)
         NotificationCenter.default.post(name: .settingsDidChange, object: nil)
         NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
+    }
+
+    private func saveHotKeyIfAvailable(_ hotKey: HotKey) {
+        switch hotKeyManager.register(hotKey) {
+        case .success:
+            settings.hotKey = hotKey
+            shortcutButton.hotKey = hotKey
+            NotificationCenter.default.post(name: .settingsDidChange, object: nil)
+        case .failure(let error):
+            NSSound.beep()
+            shortcutButton.hotKey = settings.hotKey
+            restoreStoredHotKey()
+            showHotKeyError(error)
+        }
+    }
+
+    private func restoreStoredHotKey() {
+        if case .failure(let error) = hotKeyManager.register(settings.hotKey) {
+            NSLog("Failed to restore global hotkey: \(error.localizedDescription)")
+        }
+    }
+
+    private func showHotKeyError(_ error: HotKeyRegistrationError) {
+        guard let window else {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Shortcut unavailable"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window)
     }
 }
 

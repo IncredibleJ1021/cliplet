@@ -2,11 +2,26 @@ import Carbon
 import ClipletCore
 import Foundation
 
+enum HotKeyRegistrationError: Error, LocalizedError {
+    case eventHandlerUnavailable(OSStatus)
+    case registrationFailed(OSStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case .eventHandlerUnavailable(let status):
+            "Global shortcut event handling is unavailable. Carbon status: \(status)."
+        case .registrationFailed(let status):
+            "The shortcut could not be registered. It may already be used by macOS or another app. Carbon status: \(status)."
+        }
+    }
+}
+
 final class HotKeyManager {
     var onPressed: (() -> Void)?
 
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
+    private var eventHandlerStatus: OSStatus = OSStatus(eventNotHandledErr)
     private let hotKeyID = EventHotKeyID(signature: 0x434C4950, id: 1)
 
     init() {
@@ -21,8 +36,13 @@ final class HotKeyManager {
         }
     }
 
-    func register(_ hotKey: HotKey) {
+    @discardableResult
+    func register(_ hotKey: HotKey) -> Result<Void, HotKeyRegistrationError> {
         unregister()
+
+        guard eventHandlerStatus == noErr else {
+            return .failure(.eventHandlerUnavailable(eventHandlerStatus))
+        }
 
         let status = RegisterEventHotKey(
             UInt32(hotKey.keyCode),
@@ -35,7 +55,10 @@ final class HotKeyManager {
 
         if status != noErr {
             NSLog("Failed to register global hotkey: \(status)")
+            return .failure(.registrationFailed(status))
         }
+
+        return .success(())
     }
 
     func unregister() {
@@ -52,7 +75,7 @@ final class HotKeyManager {
         )
 
         let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        let status = InstallEventHandler(
+        eventHandlerStatus = InstallEventHandler(
             GetApplicationEventTarget(),
             { _, event, userData in
                 guard let event,
@@ -89,8 +112,8 @@ final class HotKeyManager {
             &eventHandlerRef
         )
 
-        if status != noErr {
-            NSLog("Failed to install hotkey event handler: \(status)")
+        if eventHandlerStatus != noErr {
+            NSLog("Failed to install hotkey event handler: \(eventHandlerStatus)")
         }
     }
 }

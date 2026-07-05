@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager.onPressed = { [weak self] in
             self?.toggleClipboardPanel()
         }
-        hotKeyManager.register(settings.hotKey)
+        registerConfiguredHotKey()
 
         monitor.start()
     }
@@ -58,10 +58,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showClipboardPanel() {
         if clipboardPanelController == nil {
-            clipboardPanelController = ClipboardPanelController(history: history)
+            clipboardPanelController = ClipboardPanelController(
+                history: history,
+                onPasteboardWrite: { [weak monitor] in
+                    monitor?.syncChangeCount()
+                }
+            )
         }
 
         clipboardPanelController?.show()
+    }
+
+    private func registerConfiguredHotKey() {
+        if case .failure(let error) = hotKeyManager.register(settings.hotKey) {
+            NSLog("Failed to register configured hotkey: \(error.localizedDescription)")
+        }
     }
 
     @objc private func openPreferences() {

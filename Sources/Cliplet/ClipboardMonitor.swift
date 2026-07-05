@@ -27,6 +27,10 @@ final class ClipboardMonitor {
         timer = nil
     }
 
+    func syncChangeCount() {
+        changeCount = NSPasteboard.general.changeCount
+    }
+
     private func poll() {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount != changeCount else {
