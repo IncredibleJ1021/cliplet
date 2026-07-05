@@ -1,4 +1,4 @@
-.PHONY: build test run package clean
+.PHONY: build test run package dmg clean
 
 build:
 	swift build
@@ -11,6 +11,9 @@ run:
 
 package:
 	./scripts/package_app.sh
+
+dmg: package
+	./scripts/package_dmg.sh
 
 clean:
 	rm -rf .build dist

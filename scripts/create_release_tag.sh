@@ -17,6 +17,7 @@ git diff --quiet
 git diff --cached --quiet
 swift test
 ./scripts/package_app.sh
+./scripts/package_dmg.sh
 git tag -a "${TAG}" -m "Release ${TAG}"
 git push origin main
 git push origin "${TAG}"

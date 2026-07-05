@@ -23,6 +23,9 @@ jobs:
       - name: Package app
         run: VERSION="${GITHUB_REF_NAME#v}" ./scripts/package_app.sh
 
+      - name: Package DMG
+        run: VERSION="${GITHUB_REF_NAME}" ./scripts/package_dmg.sh
+
       - name: Archive app
         run: |
           cd dist
@@ -34,5 +37,6 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             "dist/cliplet-macOS-${GITHUB_REF_NAME}.zip" \
+            "dist/cliplet-macOS-${GITHUB_REF_NAME}.dmg" \
             --title "cliplet ${GITHUB_REF_NAME}" \
             --generate-notes
