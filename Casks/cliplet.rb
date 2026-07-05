@@ -7,7 +7,7 @@ cask "cliplet" do
   desc "Lightweight macOS menu bar clipboard history"
   homepage "https://github.com/IncredibleJ1021/cliplet"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "cliplet.app"
 

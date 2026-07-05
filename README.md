@@ -26,13 +26,20 @@ Homebrew Cask 会把 `cliplet.app` 安装到 `/Applications`：
 
 ```sh
 brew tap IncredibleJ1021/cliplet https://github.com/IncredibleJ1021/cliplet.git
-brew install --cask cliplet
+brew install --cask IncredibleJ1021/cliplet/cliplet
+```
+
+Homebrew 6.0 之后，第三方 tap 需要显式信任。如果安装时提示 untrusted tap，可只信任这个 cask 后再安装：
+
+```sh
+brew trust --cask IncredibleJ1021/cliplet/cliplet
+brew install --cask IncredibleJ1021/cliplet/cliplet
 ```
 
 更新和卸载：
 
 ```sh
-brew upgrade --cask cliplet
+brew upgrade --cask IncredibleJ1021/cliplet/cliplet
 brew uninstall --cask cliplet
 ```
 
