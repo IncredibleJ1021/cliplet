@@ -20,6 +20,10 @@ let package = Package(
         .testTarget(
             name: "ClipletCoreTests",
             dependencies: ["ClipletCore"]
+        ),
+        .testTarget(
+            name: "ClipletTests",
+            dependencies: ["Cliplet", "ClipletCore"]
         )
     ]
 )

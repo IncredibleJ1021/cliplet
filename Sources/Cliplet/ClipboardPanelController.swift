@@ -5,7 +5,7 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
     private let history: ClipboardHistory
     private let settings: AppSettings
     private let autoPasteController: AutoPasteController
-    private let onPasteboardWrite: () -> Void
+    private let selectionService: ClipboardSelectionService
     private let tableView = NSTableView()
     private let searchField = NSSearchField()
     private let emptyLabel = NSTextField(labelWithString: "No clips yet")
@@ -30,7 +30,10 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         self.history = history
         self.settings = settings
         self.autoPasteController = autoPasteController
-        self.onPasteboardWrite = onPasteboardWrite
+        self.selectionService = ClipboardSelectionService(
+            history: history,
+            onPasteboardWrite: onPasteboardWrite
+        )
 
         let window = ClipboardPanelWindow(
             contentRect: NSRect(x: 0, y: 0, width: 540, height: 580),
@@ -195,34 +198,16 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
         }
 
         let item = displayedItems[selectedRow]
-        let pasteboard = NSPasteboard.general
-        var didUpdateHistory = false
-
-        switch item.kind {
-        case .text:
-            guard let text = item.text else {
-                return
+        switch selectionService.copy(item) {
+        case .copied(let historyChanged):
+            if historyChanged {
+                NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
             }
-
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
-            didUpdateHistory = history.add(text)
-        case .image:
-            guard let imageData = history.imageData(for: item),
-                  let imagePasteboardType = item.imagePasteboardType else {
-                return
-            }
-
-            let pasteboardType = NSPasteboard.PasteboardType(rawValue: imagePasteboardType)
-            pasteboard.clearContents()
-            pasteboard.setData(imageData, forType: pasteboardType)
-            didUpdateHistory = history.addImageData(imageData, pasteboardType: pasteboardType.rawValue)
+        case .itemUnavailable, .pasteboardWriteFailed:
+            NSSound.beep()
+            return
         }
 
-        onPasteboardWrite()
-        if didUpdateHistory {
-            NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
-        }
         close()
 
         guard settings.pasteAfterSelection else {
