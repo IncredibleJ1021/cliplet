@@ -14,8 +14,11 @@ cliplet 是一个轻量级 macOS 菜单栏剪切板历史应用，使用 Swift P
 ## 发布
 
 - 版本标签必须使用 `vMAJOR.MINOR.PATCH` 格式，例如 `v0.2.0`。
-- 在干净的 `main` 分支上运行 `./scripts/create_release_tag.sh v0.2.0`，脚本会执行测试、本地打包、推送 `main`，并推送版本标签。
+- 发布前必须在干净的 `main` 分支上确认 `HEAD` 与 `origin/main` 完全一致。默认运行 `./scripts/create_release_tag.sh v0.4.1` 执行本地测试、本地打包、推送 `main` 和版本标签。
+- 若机器只有 Command Line Tools、无法运行 XCTest，先推送 `main` 并等待同一提交的 GitHub CI 成功，再使用 `CLIPLET_TEST_GATE=github SWIFT_BUILD_SYSTEM=native ./scripts/create_release_tag.sh v0.4.1`；脚本只接受该精确提交的成功 CI。
+- `scripts/package_app.sh` 使用 SwiftPM 构建 macOS 13.0 的 arm64 与 x86_64 两个切片，合并为 universal app，并执行显式的 ad-hoc 签名和包校验。
 - 推送版本标签会触发 `.github/workflows/release.yml`，生成 `cliplet.app`，打包为 zip 后上传到 GitHub 发布版本。
+- ad-hoc 签名不提供 Apple Developer ID 或 notarization；发布说明不得声称已完成公证。
 
 ## 架构说明
 

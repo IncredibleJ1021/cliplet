@@ -101,6 +101,7 @@ npm publish --access public
 make build
 make test
 make run
+make verify
 npm run pack:check
 ```
 
@@ -121,13 +122,20 @@ make dmg
 
 ## 发布
 
-推送语义化版本标签后，会自动创建发布版本：
+发布脚本要求工作树干净、当前分支为 `main` 且 `HEAD` 与 `origin/main` 完全一致。默认在本地运行完整测试：
 
 ```sh
-./scripts/create_release_tag.sh v0.4.0
+./scripts/create_release_tag.sh v0.4.1
+```
+
+若发布机器只有 Command Line Tools、无法运行 XCTest，必须先推送 `main` 并等待同一提交的 GitHub CI 成功，再显式使用远端测试门禁：
+
+```sh
+CLIPLET_TEST_GATE=github SWIFT_BUILD_SYSTEM=native ./scripts/create_release_tag.sh v0.4.1
 ```
 
 GitHub Actions 发布流程会构建 `cliplet.app`，进行 ad-hoc 签名，并上传 zip 与 DMG 到 GitHub 发布版本。
+发布包包含 arm64 与 x86_64 两种架构，部署目标为 macOS 13.0。ad-hoc 签名不等于 Apple 公证；当前发布流程不会声称或提供 notarization。
 
 ## 当前范围
 
