@@ -1,12 +1,60 @@
 import AppKit
 import ApplicationServices
 
+enum AutoPasteResult: Equatable {
+    case pasted
+    case accessibilityDenied
+    case targetUnavailable
+    case activationFailed
+    case activationTimedOut
+    case eventPostingFailed
+}
+
+struct AutoPasteEnvironment {
+    let isTrusted: () -> Bool
+    let isApplicationAvailable: (NSRunningApplication) -> Bool
+    let activate: (NSRunningApplication) -> Bool
+    let frontmostPID: () -> pid_t?
+    let postCommandV: () -> Bool
+    let now: () -> TimeInterval
+    let schedule: (TimeInterval, @escaping () -> Void) -> Void
+
+    static let live = AutoPasteEnvironment(
+        isTrusted: { AXIsProcessTrusted() },
+        isApplicationAvailable: { !$0.isTerminated },
+        activate: { application in
+            if #available(macOS 14, *) {
+                return application.activate()
+            }
+            return application.activate(options: [.activateIgnoringOtherApps])
+        },
+        frontmostPID: { NSWorkspace.shared.frontmostApplication?.processIdentifier },
+        postCommandV: AutoPasteController.postCommandV,
+        now: { ProcessInfo.processInfo.systemUptime },
+        schedule: { delay, action in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+        }
+    )
+}
+
 final class AutoPasteController {
-    private let pasteKeyCode: CGKeyCode = 9
-    private let pasteDelay: TimeInterval = 0.12
+    private static let pasteKeyCode: CGKeyCode = 9
+    private let environment: AutoPasteEnvironment
+    private let activationTimeout: TimeInterval
+    private let pollInterval: TimeInterval
+
+    init(
+        environment: AutoPasteEnvironment = .live,
+        activationTimeout: TimeInterval = 0.5,
+        pollInterval: TimeInterval = 0.02
+    ) {
+        self.environment = environment
+        self.activationTimeout = activationTimeout
+        self.pollInterval = pollInterval
+    }
 
     var isAccessibilityTrusted: Bool {
-        AXIsProcessTrusted()
+        environment.isTrusted()
     }
 
     @discardableResult
@@ -21,43 +69,72 @@ final class AutoPasteController {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else {
             return
         }
-
         NSWorkspace.shared.open(url)
     }
 
-    @discardableResult
-    func paste(to application: NSRunningApplication?) -> Bool {
-        guard isAccessibilityTrusted else {
-            return false
+    func paste(
+        to application: NSRunningApplication?,
+        completion: @escaping (AutoPasteResult) -> Void
+    ) {
+        let deadline = environment.now() + activationTimeout
+        guard environment.isTrusted() else {
+            completion(.accessibilityDenied)
+            return
         }
-
-        activate(application)
-        DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) { [pasteKeyCode] in
-            Self.postCommandV(keyCode: pasteKeyCode)
+        guard let application, environment.isApplicationAvailable(application) else {
+            completion(.targetUnavailable)
+            return
         }
-        return true
-    }
-
-    private func activate(_ application: NSRunningApplication?) {
-        guard let application else {
+        guard environment.activate(application) else {
+            completion(.activationFailed)
             return
         }
 
-        if #available(macOS 14, *) {
-            application.activate()
-        } else {
-            application.activate(options: [.activateIgnoringOtherApps])
+        waitForActivation(of: application, deadline: deadline, completion: completion)
+    }
+
+    private func waitForActivation(
+        of application: NSRunningApplication,
+        deadline: TimeInterval,
+        completion: @escaping (AutoPasteResult) -> Void
+    ) {
+        guard environment.isApplicationAvailable(application) else {
+            completion(.targetUnavailable)
+            return
+        }
+        guard environment.now() < deadline else {
+            completion(.activationTimedOut)
+            return
+        }
+        if environment.frontmostPID() == application.processIdentifier {
+            completion(environment.postCommandV() ? .pasted : .eventPostingFailed)
+            return
+        }
+
+        environment.schedule(pollInterval) { [weak self, weak application] in
+            guard let self, let application else {
+                completion(.targetUnavailable)
+                return
+            }
+            self.waitForActivation(
+                of: application,
+                deadline: deadline,
+                completion: completion
+            )
         }
     }
 
-    private static func postCommandV(keyCode: CGKeyCode) {
+    fileprivate static func postCommandV() -> Bool {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: pasteKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: pasteKeyCode, keyDown: false) else {
+            return false
+        }
 
-        keyDown?.flags = [.maskCommand]
-        keyUp?.flags = [.maskCommand]
-        keyDown?.post(tap: .cghidEventTap)
-        keyUp?.post(tap: .cghidEventTap)
+        keyDown.flags = [.maskCommand]
+        keyUp.flags = [.maskCommand]
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+        return true
     }
 }

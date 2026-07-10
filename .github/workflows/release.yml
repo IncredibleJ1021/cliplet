@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -22,6 +22,9 @@ jobs:
 
       - name: Package app
         run: VERSION="${GITHUB_REF_NAME#v}" ./scripts/package_app.sh
+
+      - name: Verify packaged app
+        run: ./scripts/verify_app.sh dist/cliplet.app "${GITHUB_REF_NAME#v}"
 
       - name: Package DMG
         run: VERSION="${GITHUB_REF_NAME}" ./scripts/package_dmg.sh

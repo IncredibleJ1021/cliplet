@@ -48,9 +48,32 @@ public final class ClipboardHistory {
             return false
         }
 
-        items.removeAll { $0.text == content }
+        if let existing = items.first(where: { $0.text == content }) {
+            return promote(existing.id, createdAt: createdAt)
+        }
+
         items.insert(ClipboardItem(content: content, createdAt: createdAt), at: 0)
         trimToLimit()
+        persistAndPruneImages()
+        return true
+    }
+
+    @discardableResult
+    public func promote(_ id: UUID, createdAt: Date = Date()) -> Bool {
+        guard let index = items.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+
+        let existing = items.remove(at: index)
+        let promoted: ClipboardItem
+        switch existing.payload {
+        case .text(let text):
+            promoted = ClipboardItem(id: existing.id, content: text, createdAt: createdAt)
+        case .image(let image):
+            promoted = ClipboardItem(id: existing.id, image: image, createdAt: createdAt)
+        }
+
+        items.insert(promoted, at: 0)
         persistAndPruneImages()
         return true
     }
@@ -65,27 +88,30 @@ public final class ClipboardHistory {
             return false
         }
 
+        let fingerprint = imageData.clipletFingerprint
+        if let existing = items.first(where: {
+            $0.imagePasteboardType == pasteboardType &&
+                $0.imageByteCount == imageData.count &&
+                $0.imageFingerprint == fingerprint &&
+                self.imageData(for: $0) == imageData
+        }) {
+            return promote(existing.id, createdAt: createdAt)
+        }
+
         let id = UUID()
         let image: ClipboardImage
         do {
-            image = try imageStore.store(imageData, pasteboardType: pasteboardType, id: id)
+            image = try imageStore.store(
+                imageData,
+                pasteboardType: pasteboardType,
+                id: id,
+                fingerprint: fingerprint
+            )
         } catch {
             return false
         }
 
-        items.removeAll {
-            $0.imagePasteboardType == pasteboardType &&
-                $0.imageByteCount == image.byteCount &&
-                $0.imageFingerprint == image.fingerprint
-        }
-        items.insert(
-            ClipboardItem(
-                id: id,
-                image: image,
-                createdAt: createdAt
-            ),
-            at: 0
-        )
+        items.insert(ClipboardItem(id: id, image: image, createdAt: createdAt), at: 0)
         trimToLimit()
         persistAndPruneImages()
         return true

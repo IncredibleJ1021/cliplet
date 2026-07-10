@@ -23,6 +23,21 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertEqual(history.items.map(\.content), ["first", "second"])
     }
 
+    func testPromotesExistingTextItemWithoutChangingID() {
+        let defaults = makeDefaults()
+        let history = makeHistory(defaults: defaults, limit: 5)
+        let promotedAt = Date(timeIntervalSince1970: 123)
+
+        history.add("first")
+        history.add("second")
+        let firstID = history.items.last!.id
+
+        XCTAssertTrue(history.promote(firstID, createdAt: promotedAt))
+        XCTAssertEqual(history.items.first?.id, firstID)
+        XCTAssertEqual(history.items.first?.text, "first")
+        XCTAssertEqual(history.items.first?.createdAt, promotedAt)
+    }
+
     func testTrimsToLimit() {
         let defaults = makeDefaults()
         let history = makeHistory(defaults: defaults, limit: 2)
@@ -88,6 +103,100 @@ final class ClipboardHistoryTests: XCTestCase {
         history.addImageData(firstData, pasteboardType: "public.png")
 
         XCTAssertEqual(history.items.compactMap { history.imageData(for: $0) }, [firstData, secondData])
+    }
+
+    func testPromotesExistingImageWithoutCreatingAnotherFile() throws {
+        let defaults = makeDefaults()
+        let imageStore = makeImageStore()
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5, imageStore: imageStore)
+        let data = Data([0, 1, 2, 3])
+
+        history.addImageData(data, pasteboardType: "public.png")
+        let original = history.items[0]
+        let originalKey = original.imageStorageKey
+
+        XCTAssertTrue(history.promote(original.id, createdAt: Date(timeIntervalSince1970: 456)))
+        XCTAssertEqual(history.items.first?.imageStorageKey, originalKey)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: imageStore.directoryURL.path).count, 1)
+    }
+
+    func testAddingDuplicateImageReusesExistingFile() throws {
+        let defaults = makeDefaults()
+        let imageStore = makeImageStore()
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5, imageStore: imageStore)
+        let data = Data([0, 1, 2, 3])
+
+        history.addImageData(data, pasteboardType: "public.png")
+        let originalKey = history.items.first?.imageStorageKey
+        history.addImageData(data, pasteboardType: "public.png")
+
+        XCTAssertEqual(history.items.count, 1)
+        XCTAssertEqual(history.items.first?.imageStorageKey, originalKey)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: imageStore.directoryURL.path).count, 1)
+    }
+
+    func testFingerprintCandidateRequiresExactByteEquality() throws {
+        let defaults = makeDefaults()
+        let imageStore = makeImageStore()
+        let newData = Data([9, 8, 7, 6])
+        let storedData = Data([1, 2, 3, 4])
+        let key = "collision.png"
+        try FileManager.default.createDirectory(at: imageStore.directoryURL, withIntermediateDirectories: true)
+        try storedData.write(to: imageStore.directoryURL.appendingPathComponent(key))
+
+        let existing = ClipboardItem(
+            image: ClipboardImage(
+                storage: .file(key),
+                pasteboardType: "public.png",
+                byteCount: newData.count,
+                fingerprint: newData.clipletFingerprint
+            )
+        )
+        defaults.set(try JSONEncoder().encode([existing]), forKey: "items")
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5, imageStore: imageStore)
+
+        XCTAssertTrue(history.addImageData(newData, pasteboardType: "public.png"))
+        XCTAssertEqual(history.items.count, 2)
+        XCTAssertEqual(history.items.first.flatMap { history.imageData(for: $0) }, newData)
+    }
+
+    func testDuplicateImageSearchesPastFingerprintCollisionCandidate() throws {
+        let defaults = makeDefaults()
+        let imageStore = makeImageStore()
+        let newData = Data([9, 8, 7, 6])
+        let collisionData = Data([1, 2, 3, 4])
+        let collisionKey = "collision.png"
+        let exactKey = "exact.png"
+        let exactID = UUID()
+        try FileManager.default.createDirectory(at: imageStore.directoryURL, withIntermediateDirectories: true)
+        try collisionData.write(to: imageStore.directoryURL.appendingPathComponent(collisionKey))
+        try newData.write(to: imageStore.directoryURL.appendingPathComponent(exactKey))
+
+        let collision = ClipboardItem(
+            image: ClipboardImage(
+                storage: .file(collisionKey),
+                pasteboardType: "public.png",
+                byteCount: newData.count,
+                fingerprint: newData.clipletFingerprint
+            )
+        )
+        let exact = ClipboardItem(
+            id: exactID,
+            image: ClipboardImage(
+                storage: .file(exactKey),
+                pasteboardType: "public.png",
+                byteCount: newData.count,
+                fingerprint: newData.clipletFingerprint
+            )
+        )
+        defaults.set(try JSONEncoder().encode([collision, exact]), forKey: "items")
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5, imageStore: imageStore)
+
+        XCTAssertTrue(history.addImageData(newData, pasteboardType: "public.png"))
+        XCTAssertEqual(history.items.count, 2)
+        XCTAssertEqual(history.items.first?.id, exactID)
+        XCTAssertEqual(history.items.first?.imageStorageKey, exactKey)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: imageStore.directoryURL.path).count, 2)
     }
 
     func testRemovesPrunedImageFiles() {

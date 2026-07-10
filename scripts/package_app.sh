@@ -5,38 +5,24 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="cliplet"
 VERSION="${VERSION:-}"
 BUILD_NUMBER="${BUILD_NUMBER:-}"
+SWIFT_BUILD_SYSTEM="${SWIFT_BUILD_SYSTEM:-native}"
+ARM64_SCRATCH="${ROOT_DIR}/.build/package-arm64"
+X86_64_SCRATCH="${ROOT_DIR}/.build/package-x86_64"
+UNIVERSAL_DIR="${ROOT_DIR}/.build/package-universal"
 
 if [[ -z "${VERSION}" ]]; then
-  VERSION="$(git -C "${ROOT_DIR}" describe --tags --always --dirty 2>/dev/null || echo "0.1.0")"
+  VERSION="$(git -C "${ROOT_DIR}" describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 2>/dev/null || echo "v0.1.0")"
   VERSION="${VERSION#v}"
+fi
+
+if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "VERSION must use MAJOR.MINOR.PATCH: ${VERSION}" >&2
+  exit 1
 fi
 
 if [[ -z "${BUILD_NUMBER}" ]]; then
   BUILD_NUMBER="$(git -C "${ROOT_DIR}" rev-list --count HEAD 2>/dev/null || echo "1")"
 fi
-
-build_with_swiftc() {
-  local fallback_dir="${ROOT_DIR}/.build/fallback"
-  mkdir -p "${fallback_dir}" "${ROOT_DIR}/.build/release"
-
-  swiftc \
-    -parse-as-library \
-    -emit-library \
-    -static \
-    -module-name ClipletCore \
-    "${ROOT_DIR}"/Sources/ClipletCore/*.swift \
-    -emit-module-path "${fallback_dir}/ClipletCore.swiftmodule" \
-    -o "${fallback_dir}/libClipletCore.a"
-
-  swiftc \
-    -I "${fallback_dir}" \
-    "${fallback_dir}/libClipletCore.a" \
-    "${ROOT_DIR}"/Sources/Cliplet/*.swift \
-    -o "${ROOT_DIR}/.build/release/${APP_NAME}" \
-    -framework AppKit \
-    -framework ApplicationServices \
-    -framework Carbon
-}
 
 generate_app_icon() {
   local target_icns="$1"
@@ -67,10 +53,28 @@ generate_app_icon() {
   rm -rf "${icon_work_dir}"
 }
 
-if ! swift build -c release --package-path "${ROOT_DIR}"; then
-  echo "SwiftPM build failed; falling back to direct swiftc build." >&2
-  build_with_swiftc
-fi
+build_slice() {
+  local triple="$1"
+  local scratch_path="$2"
+  local args=(
+    -c release
+    --package-path "${ROOT_DIR}"
+    --scratch-path "${scratch_path}"
+    --triple "${triple}"
+    --product "${APP_NAME}"
+    --build-system "${SWIFT_BUILD_SYSTEM}"
+  )
+  swift build "${args[@]}" >&2
+  swift build "${args[@]}" --show-bin-path
+}
+
+ARM64_BIN_DIR="$(build_slice arm64-apple-macosx13.0 "${ARM64_SCRATCH}")"
+X86_64_BIN_DIR="$(build_slice x86_64-apple-macosx13.0 "${X86_64_SCRATCH}")"
+mkdir -p "${UNIVERSAL_DIR}"
+lipo -create \
+  "${ARM64_BIN_DIR}/${APP_NAME}" \
+  "${X86_64_BIN_DIR}/${APP_NAME}" \
+  -output "${UNIVERSAL_DIR}/${APP_NAME}"
 
 APP_DIR="${ROOT_DIR}/dist/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
@@ -80,7 +84,7 @@ RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 rm -rf "${APP_DIR}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 
-cp "${ROOT_DIR}/.build/release/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
+cp "${UNIVERSAL_DIR}/${APP_NAME}" "${MACOS_DIR}/${APP_NAME}"
 chmod +x "${MACOS_DIR}/${APP_NAME}"
 
 sed \
@@ -90,8 +94,8 @@ sed \
 
 generate_app_icon "${RESOURCES_DIR}/AppIcon.icns"
 
-if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "${APP_DIR}" >/dev/null
-fi
+codesign --force --deep --sign - "${APP_DIR}" >/dev/null
+
+"${ROOT_DIR}/scripts/verify_app.sh" "${APP_DIR}" "${VERSION}"
 
 echo "Packaged ${APP_DIR}"
