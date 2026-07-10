@@ -20,7 +20,12 @@ public final class ClipboardImageStore {
         return ClipboardImageStore(directoryURL: directoryURL)
     }
 
-    public func store(_ data: Data, pasteboardType: String, id: UUID = UUID()) throws -> ClipboardImage {
+    public func store(
+        _ data: Data,
+        pasteboardType: String,
+        id: UUID = UUID(),
+        fingerprint: String? = nil
+    ) throws -> ClipboardImage {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
         let key = "\(id.uuidString).\(fileExtension(for: pasteboardType))"
@@ -31,7 +36,7 @@ public final class ClipboardImageStore {
             storage: .file(key),
             pasteboardType: pasteboardType,
             byteCount: data.count,
-            fingerprint: data.clipletFingerprint
+            fingerprint: fingerprint ?? data.clipletFingerprint
         )
     }
 
