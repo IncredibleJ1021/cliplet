@@ -92,8 +92,9 @@ public final class ClipboardHistory {
         if let existing = items.first(where: {
             $0.imagePasteboardType == pasteboardType &&
                 $0.imageByteCount == imageData.count &&
-                $0.imageFingerprint == fingerprint
-        }), self.imageData(for: existing) == imageData {
+                $0.imageFingerprint == fingerprint &&
+                self.imageData(for: $0) == imageData
+        }) {
             return promote(existing.id, createdAt: createdAt)
         }
 

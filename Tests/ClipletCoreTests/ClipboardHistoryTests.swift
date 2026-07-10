@@ -160,6 +160,45 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertEqual(history.items.first.flatMap { history.imageData(for: $0) }, newData)
     }
 
+    func testDuplicateImageSearchesPastFingerprintCollisionCandidate() throws {
+        let defaults = makeDefaults()
+        let imageStore = makeImageStore()
+        let newData = Data([9, 8, 7, 6])
+        let collisionData = Data([1, 2, 3, 4])
+        let collisionKey = "collision.png"
+        let exactKey = "exact.png"
+        let exactID = UUID()
+        try FileManager.default.createDirectory(at: imageStore.directoryURL, withIntermediateDirectories: true)
+        try collisionData.write(to: imageStore.directoryURL.appendingPathComponent(collisionKey))
+        try newData.write(to: imageStore.directoryURL.appendingPathComponent(exactKey))
+
+        let collision = ClipboardItem(
+            image: ClipboardImage(
+                storage: .file(collisionKey),
+                pasteboardType: "public.png",
+                byteCount: newData.count,
+                fingerprint: newData.clipletFingerprint
+            )
+        )
+        let exact = ClipboardItem(
+            id: exactID,
+            image: ClipboardImage(
+                storage: .file(exactKey),
+                pasteboardType: "public.png",
+                byteCount: newData.count,
+                fingerprint: newData.clipletFingerprint
+            )
+        )
+        defaults.set(try JSONEncoder().encode([collision, exact]), forKey: "items")
+        let history = ClipboardHistory(defaults: defaults, storageKey: "items", limit: 5, imageStore: imageStore)
+
+        XCTAssertTrue(history.addImageData(newData, pasteboardType: "public.png"))
+        XCTAssertEqual(history.items.count, 2)
+        XCTAssertEqual(history.items.first?.id, exactID)
+        XCTAssertEqual(history.items.first?.imageStorageKey, exactKey)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: imageStore.directoryURL.path).count, 2)
+    }
+
     func testRemovesPrunedImageFiles() {
         let defaults = makeDefaults()
         let imageStore = makeImageStore()
