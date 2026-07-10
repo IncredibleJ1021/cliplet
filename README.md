@@ -69,7 +69,7 @@ npx github:IncredibleJ1021/cliplet install
 常用配置：
 
 ```sh
-CLIPLET_VERSION=v0.4.0 npx github:IncredibleJ1021/cliplet install
+CLIPLET_VERSION=v0.4.1 npx github:IncredibleJ1021/cliplet install
 CLIPLET_INSTALL_DIR="$HOME/Applications" npx github:IncredibleJ1021/cliplet install
 npx github:IncredibleJ1021/cliplet open
 npx github:IncredibleJ1021/cliplet uninstall
