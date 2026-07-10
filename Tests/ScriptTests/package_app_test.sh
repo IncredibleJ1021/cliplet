@@ -16,6 +16,7 @@ grep -q 'swift build' "${PACKAGE_SCRIPT}"
 grep -q 'verify_app.sh' "${PACKAGE_SCRIPT}"
 grep -q 'arm64-apple-macosx13.0' "${PACKAGE_SCRIPT}"
 grep -q 'x86_64-apple-macosx13.0' "${PACKAGE_SCRIPT}"
+grep -q 'SWIFT_BUILD_SYSTEM:-native' "${PACKAGE_SCRIPT}"
 
 if "${VERIFY_SCRIPT}" >/tmp/cliplet-verify-usage.out 2>&1; then
   echo "verify_app.sh accepted missing arguments" >&2
