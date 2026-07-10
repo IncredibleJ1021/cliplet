@@ -214,8 +214,18 @@ final class ClipboardPanelController: NSWindowController, NSTableViewDataSource,
             return
         }
 
-        if !autoPasteController.paste(to: sourceApplication) {
-            autoPasteController.requestAccessibilityPermissionPrompt()
+        autoPasteController.paste(to: sourceApplication) { [weak self] result in
+            guard let self else {
+                return
+            }
+            switch result {
+            case .pasted:
+                break
+            case .accessibilityDenied:
+                self.autoPasteController.requestAccessibilityPermissionPrompt()
+            case .targetUnavailable, .activationFailed, .activationTimedOut, .eventPostingFailed:
+                NSLog("Automatic paste fell back to copy-only: \(String(describing: result))")
+            }
         }
     }
 
