@@ -101,16 +101,46 @@ final class AutoPasteControllerTests: XCTestCase {
     }
 
     func testTimesOutWithoutPosting() {
+        var monotonicTime: TimeInterval = 0
         var postCount = 0
         let controller = makeController(
             frontmostPID: { nil },
             postCommandV: { postCount += 1; return true },
             activationTimeout: 0.04,
-            pollInterval: 0.02
+            pollInterval: 0.02,
+            now: { monotonicTime },
+            schedule: { delay, action in
+                monotonicTime += delay
+                action()
+            }
         )
         var result: AutoPasteResult?
 
         controller.paste(to: .current) { result = $0 }
+
+        XCTAssertEqual(result, .activationTimedOut)
+        XCTAssertEqual(postCount, 0)
+    }
+
+    func testDelayedPollPastDeadlineTimesOutWithoutPosting() {
+        let target = NSRunningApplication.current
+        var monotonicTime: TimeInterval = 0
+        var postCount = 0
+        let controller = makeController(
+            frontmostPID: {
+                monotonicTime >= 1 ? target.processIdentifier : nil
+            },
+            postCommandV: { postCount += 1; return true },
+            activationTimeout: 0.5,
+            now: { monotonicTime },
+            schedule: { _, action in
+                monotonicTime = 1
+                action()
+            }
+        )
+        var result: AutoPasteResult?
+
+        controller.paste(to: target) { result = $0 }
 
         XCTAssertEqual(result, .activationTimedOut)
         XCTAssertEqual(postCount, 0)
@@ -132,7 +162,9 @@ final class AutoPasteControllerTests: XCTestCase {
         frontmostPID: @escaping () -> pid_t? = { NSRunningApplication.current.processIdentifier },
         postCommandV: @escaping () -> Bool = { true },
         activationTimeout: TimeInterval = 0.5,
-        pollInterval: TimeInterval = 0.02
+        pollInterval: TimeInterval = 0.02,
+        now: @escaping () -> TimeInterval = { 0 },
+        schedule: @escaping (TimeInterval, @escaping () -> Void) -> Void = { _, action in action() }
     ) -> AutoPasteController {
         let environment = AutoPasteEnvironment(
             isTrusted: { isTrusted },
@@ -140,7 +172,8 @@ final class AutoPasteControllerTests: XCTestCase {
             activate: activate,
             frontmostPID: frontmostPID,
             postCommandV: postCommandV,
-            schedule: { _, action in action() }
+            now: now,
+            schedule: schedule
         )
         return AutoPasteController(
             environment: environment,

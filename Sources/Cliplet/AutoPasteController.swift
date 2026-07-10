@@ -16,6 +16,7 @@ struct AutoPasteEnvironment {
     let activate: (NSRunningApplication) -> Bool
     let frontmostPID: () -> pid_t?
     let postCommandV: () -> Bool
+    let now: () -> TimeInterval
     let schedule: (TimeInterval, @escaping () -> Void) -> Void
 
     static let live = AutoPasteEnvironment(
@@ -29,6 +30,7 @@ struct AutoPasteEnvironment {
         },
         frontmostPID: { NSWorkspace.shared.frontmostApplication?.processIdentifier },
         postCommandV: AutoPasteController.postCommandV,
+        now: { ProcessInfo.processInfo.systemUptime },
         schedule: { delay, action in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
         }
@@ -74,6 +76,7 @@ final class AutoPasteController {
         to application: NSRunningApplication?,
         completion: @escaping (AutoPasteResult) -> Void
     ) {
+        let deadline = environment.now() + activationTimeout
         guard environment.isTrusted() else {
             completion(.accessibilityDenied)
             return
@@ -87,24 +90,24 @@ final class AutoPasteController {
             return
         }
 
-        waitForActivation(of: application, elapsed: 0, completion: completion)
+        waitForActivation(of: application, deadline: deadline, completion: completion)
     }
 
     private func waitForActivation(
         of application: NSRunningApplication,
-        elapsed: TimeInterval,
+        deadline: TimeInterval,
         completion: @escaping (AutoPasteResult) -> Void
     ) {
         guard environment.isApplicationAvailable(application) else {
             completion(.targetUnavailable)
             return
         }
-        if environment.frontmostPID() == application.processIdentifier {
-            completion(environment.postCommandV() ? .pasted : .eventPostingFailed)
+        guard environment.now() < deadline else {
+            completion(.activationTimedOut)
             return
         }
-        guard elapsed < activationTimeout else {
-            completion(.activationTimedOut)
+        if environment.frontmostPID() == application.processIdentifier {
+            completion(environment.postCommandV() ? .pasted : .eventPostingFailed)
             return
         }
 
@@ -115,7 +118,7 @@ final class AutoPasteController {
             }
             self.waitForActivation(
                 of: application,
-                elapsed: elapsed + self.pollInterval,
+                deadline: deadline,
                 completion: completion
             )
         }
