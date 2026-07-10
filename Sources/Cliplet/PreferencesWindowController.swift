@@ -202,7 +202,13 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
-        let value = min(max(countField.integerValue, 1), 200)
+        guard let value = HistoryLimitInput.parse(countField.stringValue) else {
+            countField.integerValue = settings.historyLimit
+            stepper.integerValue = settings.historyLimit
+            NSSound.beep()
+            return
+        }
+
         countField.integerValue = value
         stepper.integerValue = value
         saveHistoryLimit(value)

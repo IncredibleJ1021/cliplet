@@ -95,6 +95,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func clearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear clipboard history?"
+        alert.informativeText = "This permanently removes all saved text and images."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Clear History")
+
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            return
+        }
+
         history.clear()
         NotificationCenter.default.post(name: .clipboardHistoryDidChange, object: nil)
     }
